@@ -26,12 +26,20 @@ Expo + Firebase monolith (App.js/AppRuntime.js). Rebuilt on the Emergent stack.
 - [x] JWT auth: register/login/me, role protection, seeded admin (admin@grafik.pl / admin123)
 - [x] Admin user CRUD (create/list/update/soft-delete, self-delete blocked)
 - [x] Schedule: get/generate/save/clear-shift; week navigator + today highlight
-- [x] Teraz dashboard (current/next shift, weekly hours & pay metrics, today crew)
-- [x] Zarobki summary with per-person filter chips + totals
+- [x] Teraz dashboard (current/next shift, weekly hours & pay metrics, today crew, quick actions)
+- [x] Zarobki summary (stack screen) with per-person filter chips + totals
 - [x] Czat team chat (5s polling)
 - [x] Ustawienia (account + logout + admin panel)
 - [x] Dark theme, role-aware bottom tabs, toasts (no Alerts), bottom-sheet editors
-- [x] Verified: 25/25 backend tests pass; all frontend flows pass
+- [x] Godziny & kolory: admin edits shift times + person colors + vehicle reg in Settings (whole team)
+- [x] Auto-generowanie: admin generates 1/2/4/8 weeks ahead in one tap (alternating rotation)
+- [x] Auto / GPS tab: live vehicle location map (native) + web fallback, foreground sharing with
+      permission handling (granted/denied/blocked + Open Settings), route history
+- [x] Zamiany zmian: employees propose swaps on their own shift; teammates accept (reassigns shift)
+- [x] Verified: 37/37 backend tests pass; all frontend flows pass
+
+## Tabs (5): Teraz · Grafik · Auto · Czat · Ustawienia
+Zarobki + Zamiany are stack screens opened from Teraz/Grafik.
 
 ## Backlog / remaining
 - P1: GPS / live vehicle location dashboard (Auto/GPS tab) — deferred by user

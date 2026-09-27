@@ -4,9 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '@/src/components/Header';
 import { Icon } from '@/src/components/Icon';
-import { Card, Loading, Badge } from '@/src/components/ui';
+import { Card, Loading, Badge, Button } from '@/src/components/ui';
 import { useWeek, useSummary, usePeople, useSettings } from '@/src/hooks';
 import { useAuth } from '@/src/auth';
+import { router } from 'expo-router';
 import { usesNativeTabs } from '@/src/navigation';
 import { makeStyles, useTheme, workerColors } from '@/src/theme';
 import { monday, iso, DAYS, shiftTime } from '@/src/constants';
@@ -160,6 +161,30 @@ export default function TerazScreen() {
               </View>
             )}
 
+            {/* Quick actions */}
+            <View style={styles.actions}>
+              <Button
+                testID="open-zarobki"
+                title="Zarobki"
+                variant="secondary"
+                small
+                icon={<Icon name="chart-bar" size={18} color={t.colors.onSurface} />}
+                onPress={() => router.push('/podsumowanie')}
+                style={{ flex: 1 }}
+              />
+              {!!user && (
+                <Button
+                  testID="open-zamiany"
+                  title="Zamiany"
+                  variant="secondary"
+                  small
+                  icon={<Icon name="swap-horizontal" size={18} color={t.colors.onSurface} />}
+                  onPress={() => router.push('/swaps')}
+                  style={{ flex: 1 }}
+                />
+              )}
+            </View>
+
             {/* Today's crew */}
             <Text style={styles.sectionTitle}>Dzisiaj na zmianie</Text>
             {todayShifts.filter((s) => s.person).length === 0 ? (
@@ -224,6 +249,7 @@ const useStyles = makeStyles((t) => ({
   metricValue: { color: t.colors.onSurface, fontSize: t.font['2xl'], fontWeight: '900', marginTop: 4 },
   metricLabel: { color: t.colors.muted, fontSize: t.font.sm },
   sectionTitle: { color: t.colors.onSurface, fontSize: t.font.lg, fontWeight: '900', marginTop: t.spacing.sm },
+  actions: { flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.sm },
   crewRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.md },
   dot: { width: 12, height: 12, borderRadius: 6 },
   crewName: { color: t.colors.onSurface, fontSize: t.font.lg, fontWeight: '800' },

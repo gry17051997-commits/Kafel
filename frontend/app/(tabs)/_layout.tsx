@@ -30,9 +30,9 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Icon sf="calendar" />
           <NativeTabs.Trigger.Label>Grafik</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="podsumowanie">
-          <NativeTabs.Trigger.Icon sf="chart.bar.fill" />
-          <NativeTabs.Trigger.Label>Zarobki</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger name="auto">
+          <NativeTabs.Trigger.Icon sf="location.fill" />
+          <NativeTabs.Trigger.Label>Auto</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="czat" hidden={!showChat}>
           <NativeTabs.Trigger.Icon sf="message.fill" />
@@ -78,10 +78,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="podsumowanie"
+        name="auto"
         options={{
-          title: 'Zarobki',
-          tabBarIcon: ({ color, size }) => <Icon name="chart-bar" color={color} size={size} />,
+          title: 'Auto',
+          tabBarIcon: ({ color, size }) => <Icon name="map-marker-radius" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

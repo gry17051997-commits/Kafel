@@ -125,3 +125,86 @@ export function usePostChat() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['chat'] }),
   });
 }
+
+/* ---------------- Multi-week generation ---------------- */
+export function useGenerateMulti() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      startWeek: string;
+      count: number;
+      hours: number;
+      rotation: string;
+      warehouse: string;
+      alternateRotation: boolean;
+    }) => post('/api/schedule/generate-multi', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['week'] });
+      qc.invalidateQueries({ queryKey: ['summary'] });
+    },
+  });
+}
+
+/* ---------------- Vehicle location ---------------- */
+export function useLatestLocation(enabled: boolean) {
+  return useQuery({
+    queryKey: ['location-latest'],
+    queryFn: () => get('/api/location/latest'),
+    enabled,
+    refetchInterval: enabled ? 4000 : false,
+  });
+}
+
+export function useLocationHistory(enabled: boolean) {
+  return useQuery({
+    queryKey: ['location-history'],
+    queryFn: () => get('/api/location/history?limit=200'),
+    enabled,
+    refetchInterval: enabled ? 6000 : false,
+  });
+}
+
+export function usePushLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { lat: number; lng: number; accuracy?: number; speed?: number }) =>
+      post('/api/location', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['location-latest'] });
+      qc.invalidateQueries({ queryKey: ['location-history'] });
+    },
+  });
+}
+
+/* ---------------- Shift swaps ---------------- */
+export function useSwaps(enabled: boolean) {
+  return useQuery({
+    queryKey: ['swaps'],
+    queryFn: () => get('/api/swaps'),
+    enabled,
+    refetchInterval: enabled ? 8000 : false,
+  });
+}
+
+export function useSwapMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['swaps'] });
+    qc.invalidateQueries({ queryKey: ['week'] });
+    qc.invalidateQueries({ queryKey: ['summary'] });
+  };
+  const create = useMutation({
+    mutationFn: (b: { weekStart: string; dayIndex: number; shift: number; note: string }) =>
+      post('/api/swaps', b),
+    onSuccess: invalidate,
+  });
+  const accept = useMutation({
+    mutationFn: (id: string) => post(`/api/swaps/${id}/accept`),
+    onSuccess: invalidate,
+  });
+  const cancel = useMutation({
+    mutationFn: (id: string) => post(`/api/swaps/${id}/cancel`),
+    onSuccess: invalidate,
+  });
+  return { create, accept, cancel };
+}

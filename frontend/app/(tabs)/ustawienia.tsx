@@ -7,12 +7,17 @@ import { Header } from '@/src/components/Header';
 import { Icon } from '@/src/components/Icon';
 import { Button, Card, Badge, Loading } from '@/src/components/ui';
 import { useToast } from '@/src/components/Toast';
-import { useUsers, useUserMutations } from '@/src/hooks';
+import { useUsers, useUserMutations, useSettings, useSaveSettings } from '@/src/hooks';
 import { useAuth } from '@/src/auth';
 import { usesNativeTabs } from '@/src/navigation';
 import { makeStyles, useTheme, workerColors } from '@/src/theme';
 import { ApiError } from '@/src/api';
 import type { User } from '@/src/constants';
+
+const COLOR_PALETTE = [
+  '#4F8CFF', '#3F78ED', '#8F6CFF', '#A855F7', '#35C98A', '#10B981',
+  '#F59E0B', '#F97316', '#EF4444', '#EC4899', '#06B6D4', '#84CC16',
+];
 
 const ROLES: { key: User['role']; label: string; icon: any }[] = [
   { key: 'employee', label: 'Pracownik', icon: 'account' },
@@ -29,9 +34,13 @@ export default function UstawieniaScreen() {
   const { user, guest, isAdmin, logout } = useAuth();
   const usersQ = useUsers(isAdmin);
   const { create, update, remove } = useUserMutations();
+  const settingsQ = useSettings();
+  const saveSettings = useSaveSettings();
 
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const sheet = useRef<BottomSheet>(null);
+  const cfgSheet = useRef<BottomSheet>(null);
+  const [cfg, setCfg] = useState<any>(null);
   const [mode, setMode] = useState<'create' | 'edit'>('create');
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -100,6 +109,29 @@ export default function UstawieniaScreen() {
   const doLogout = async () => {
     await logout();
     router.replace('/sign-in');
+  };
+
+  const openConfig = () => {
+    const s = settingsQ.data || {};
+    setCfg({
+      times: { s1: '06:00', e1: '16:00', s2: '16:00', e2: '02:00', ...(s.times || {}) },
+      personColors: { P: workerColors.P, M: workerColors.M, L: workerColors.L, ...(s.personColors || {}) },
+      vehicleRegistration: s.vehicleRegistration || '',
+      autoGenerateWeeks: s.autoGenerateWeeks || false,
+      reportGroupLink: s.reportGroupLink || '',
+    });
+    cfgSheet.current?.expand();
+  };
+
+  const saveConfig = async () => {
+    if (!cfg) return;
+    try {
+      await saveSettings.mutateAsync(cfg);
+      toast('Zapisano konfigurację', 'success');
+      cfgSheet.current?.close();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Nie udało się zapisać', 'error');
+    }
   };
 
   const roleMeta = (r: User['role']) => ROLES.find((x) => x.key === r) || ROLES[0];
@@ -221,6 +253,46 @@ export default function UstawieniaScreen() {
           </Card>
         )}
 
+        {/* Schedule configuration (admin) */}
+        {isAdmin && (
+          <Card testID="config-card">
+            <View style={styles.rowBetween}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionLabel}>GODZINY I KOLORY</Text>
+                <Text style={styles.hint}>Ustaw godziny zmian i kolory osób dla całej ekipy.</Text>
+              </View>
+              <Button
+                testID="edit-config-btn"
+                title="Edytuj"
+                small
+                variant="secondary"
+                onPress={openConfig}
+                icon={<Icon name="tune-variant" size={16} color={t.colors.onSurface} />}
+              />
+            </View>
+            <View style={styles.cfgPreview}>
+              <View style={styles.cfgTimeRow}>
+                <Icon name="clock-outline" size={15} color={t.colors.muted} />
+                <Text style={styles.cfgTimeText}>
+                  I: {settingsQ.data?.times?.s1 || '—'}–{settingsQ.data?.times?.e1 || '—'} · II:{' '}
+                  {settingsQ.data?.times?.s2 || '—'}–{settingsQ.data?.times?.e2 || '—'}
+                </Text>
+              </View>
+              <View style={styles.cfgColors}>
+                {['P', 'M', 'L'].map((k) => (
+                  <View
+                    key={k}
+                    style={[
+                      styles.cfgDot,
+                      { backgroundColor: settingsQ.data?.personColors?.[k] || workerColors[k] },
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+          </Card>
+        )}
+
         <Card>
           <Text style={styles.sectionLabel}>O APLIKACJI</Text>
           <Text style={styles.hint}>
@@ -300,6 +372,82 @@ export default function UstawieniaScreen() {
           />
         </BottomSheetScrollView>
       </BottomSheet>
+
+      {/* Schedule config sheet */}
+      <BottomSheet
+        ref={cfgSheet}
+        index={-1}
+        enablePanDownToClose
+        enableDynamicSizing={false}
+        snapPoints={['88%']}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: t.colors.surfaceSecondary }}
+        handleIndicatorStyle={{ backgroundColor: t.colors.borderStrong }}
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: insets.bottom + 24, gap: t.spacing.md }}
+        >
+          <Text style={styles.sheetTitle}>Godziny i kolory</Text>
+
+          {cfg && (
+            <>
+              <Text style={styles.fieldLabel}>Zmiana I</Text>
+              <View style={styles.timeRow}>
+                <TimeInput label="Start" value={cfg.times.s1} onChange={(v: string) => setCfg((c: any) => ({ ...c, times: { ...c.times, s1: v } }))} testID="cfg-s1" />
+                <TimeInput label="Koniec" value={cfg.times.e1} onChange={(v: string) => setCfg((c: any) => ({ ...c, times: { ...c.times, e1: v } }))} testID="cfg-e1" />
+              </View>
+
+              <Text style={styles.fieldLabel}>Zmiana II</Text>
+              <View style={styles.timeRow}>
+                <TimeInput label="Start" value={cfg.times.s2} onChange={(v: string) => setCfg((c: any) => ({ ...c, times: { ...c.times, s2: v } }))} testID="cfg-s2" />
+                <TimeInput label="Koniec" value={cfg.times.e2} onChange={(v: string) => setCfg((c: any) => ({ ...c, times: { ...c.times, e2: v } }))} testID="cfg-e2" />
+              </View>
+
+              <Text style={styles.fieldLabel}>Kolory osób</Text>
+              {['P', 'M', 'L'].map((k) => (
+                <View key={k} style={styles.colorBlock}>
+                  <View style={styles.colorBlockHead}>
+                    <View style={[styles.cfgDot, { backgroundColor: cfg.personColors[k] }]} />
+                    <Text style={styles.colorName}>Osoba {k}</Text>
+                  </View>
+                  <View style={styles.paletteRow}>
+                    {COLOR_PALETTE.map((col) => (
+                      <Pressable
+                        key={col}
+                        testID={`cfg-color-${k}-${col}`}
+                        onPress={() => setCfg((c: any) => ({ ...c, personColors: { ...c.personColors, [k]: col } }))}
+                        style={[
+                          styles.swatch,
+                          { backgroundColor: col },
+                          cfg.personColors[k] === col && styles.swatchActive,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              <Text style={styles.fieldLabel}>Numer rejestracyjny auta</Text>
+              <TextInput
+                testID="cfg-vehicle"
+                value={cfg.vehicleRegistration}
+                onChangeText={(v) => setCfg((c: any) => ({ ...c, vehicleRegistration: v }))}
+                placeholder="np. WX 12345"
+                placeholderTextColor={t.colors.muted}
+                style={styles.input}
+                autoCapitalize="characters"
+              />
+
+              <Button
+                testID="cfg-save"
+                title="ZAPISZ KONFIGURACJĘ"
+                onPress={saveConfig}
+                loading={saveSettings.isPending}
+              />
+            </>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheet>
     </View>
   );
 }
@@ -327,6 +475,26 @@ function Field({
         secureTextEntry={secure}
         keyboardType={keyboardType}
         autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
+        style={styles.input}
+      />
+    </View>
+  );
+}
+
+function TimeInput({ label, value, onChange, testID }: any) {
+  const t = useTheme();
+  const styles = useStyles();
+  return (
+    <View style={{ flex: 1, gap: 6 }}>
+      <Text style={styles.timeLabel}>{label}</Text>
+      <TextInput
+        testID={testID}
+        value={value}
+        onChangeText={onChange}
+        placeholder="00:00"
+        placeholderTextColor={t.colors.muted}
+        keyboardType="numbers-and-punctuation"
+        maxLength={5}
         style={styles.input}
       />
     </View>
@@ -400,4 +568,22 @@ const useStyles = makeStyles((t) => ({
   },
   optText: { color: t.colors.onSurfaceSecondary, fontWeight: '800', fontSize: t.font.base },
   err: { color: t.colors.error, fontSize: t.font.base, fontWeight: '700' },
+  cfgPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: t.spacing.md,
+  },
+  cfgTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  cfgTimeText: { color: t.colors.onSurfaceSecondary, fontSize: t.font.sm, fontWeight: '700' },
+  cfgColors: { flexDirection: 'row', gap: 6 },
+  cfgDot: { width: 16, height: 16, borderRadius: 8 },
+  timeRow: { flexDirection: 'row', gap: t.spacing.md },
+  timeLabel: { color: t.colors.muted, fontSize: t.font.sm, fontWeight: '700' },
+  colorBlock: { gap: t.spacing.sm },
+  colorBlockHead: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
+  colorName: { color: t.colors.onSurface, fontSize: t.font.base, fontWeight: '800' },
+  paletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
+  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: 'transparent' },
+  swatchActive: { borderColor: t.colors.onSurface },
 }));

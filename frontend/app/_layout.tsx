@@ -72,6 +72,8 @@ export default function RootLayout() {
                       <Stack.Screen name="index" />
                       <Stack.Screen name="sign-in" />
                       <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="podsumowanie" options={{ presentation: 'card' }} />
+                      <Stack.Screen name="swaps" options={{ presentation: 'card' }} />
                     </Stack>
                   </ToastProvider>
                 </BottomSheetModalProvider>

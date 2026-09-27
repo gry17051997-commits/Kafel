@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { Header } from '@/src/components/Header';
 import { Icon } from '@/src/components/Icon';
 import { Button, Loading } from '@/src/components/ui';
@@ -10,12 +10,15 @@ import {
   useWeek,
   useSaveWeek,
   useGenerateWeek,
+  useGenerateMulti,
   useClearShift,
   usePeople,
   useSettings,
   useMeta,
+  useSwapMutations,
 } from '@/src/hooks';
 import { useAuth } from '@/src/auth';
+import { router } from 'expo-router';
 import { usesNativeTabs } from '@/src/navigation';
 import { makeStyles, useTheme, workerColors } from '@/src/theme';
 import {
@@ -38,7 +41,7 @@ export default function GrafikScreen() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
 
   const [weekStartDate, setWeekStartDate] = useState(() => monday(new Date()));
   const weekStart = iso(weekStartDate);
@@ -50,7 +53,9 @@ export default function GrafikScreen() {
   const metaQ = useMeta();
   const saveWeek = useSaveWeek(weekStart);
   const generateWeek = useGenerateWeek(weekStart);
+  const generateMulti = useGenerateMulti();
   const clearShift = useClearShift(weekStart);
+  const { create: createSwap } = useSwapMutations();
 
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const times = settingsQ.data?.times;
@@ -71,8 +76,12 @@ export default function GrafikScreen() {
   // ----- shift editor sheet -----
   const editSheet = useRef<BottomSheet>(null);
   const genSheet = useRef<BottomSheet>(null);
+  const swapSheet = useRef<BottomSheet>(null);
   const [editing, setEditing] = useState<{ dayIndex: number; shift: number } | null>(null);
   const [genOpts, setGenOpts] = useState({ hours: 10, rotation: 'P', warehouse: 'PNT B' });
+  const [genCount, setGenCount] = useState(1);
+  const [swapNote, setSwapNote] = useState('');
+  const [swapTarget, setSwapTarget] = useState<{ dayIndex: number; shift: number } | null>(null);
 
   const renderBackdrop = useCallback(
     (props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />,
@@ -80,9 +89,35 @@ export default function GrafikScreen() {
   );
 
   const openEditor = (dayIndex: number, shift: number) => {
-    if (!canEdit) return;
-    setEditing({ dayIndex, shift });
-    editSheet.current?.expand();
+    if (canEdit) {
+      setEditing({ dayIndex, shift });
+      editSheet.current?.expand();
+      return;
+    }
+    // Employees can propose a swap for their own shift.
+    const day = draft?.days.find((d) => d.dayIndex === dayIndex);
+    const s = day?.shifts.find((x) => x.shift === shift);
+    if (user?.personKey && s?.person === user.personKey) {
+      setSwapTarget({ dayIndex, shift });
+      setSwapNote('');
+      swapSheet.current?.expand();
+    }
+  };
+
+  const proposeSwap = async () => {
+    if (!swapTarget) return;
+    try {
+      await createSwap.mutateAsync({
+        weekStart,
+        dayIndex: swapTarget.dayIndex,
+        shift: swapTarget.shift,
+        note: swapNote.trim(),
+      });
+      toast('Propozycja zamiany wysłana', 'success');
+      swapSheet.current?.close();
+    } catch (e: any) {
+      toast(e?.message || 'Nie udało się wysłać propozycji', 'error');
+    }
   };
 
   const persist = async (next: Week) => {
@@ -140,8 +175,20 @@ export default function GrafikScreen() {
 
   const doGenerate = async () => {
     try {
-      await generateWeek.mutateAsync(genOpts);
-      toast('Grafik wygenerowany', 'success');
+      if (genCount > 1) {
+        const res = await generateMulti.mutateAsync({
+          startWeek: weekStart,
+          count: genCount,
+          hours: genOpts.hours,
+          rotation: genOpts.rotation,
+          warehouse: genOpts.warehouse,
+          alternateRotation: true,
+        });
+        toast(`Wygenerowano ${res.count} tygodni`, 'success');
+      } else {
+        await generateWeek.mutateAsync(genOpts);
+        toast('Grafik wygenerowany', 'success');
+      }
       genSheet.current?.close();
     } catch {
       toast('Nie udało się wygenerować grafiku', 'error');
@@ -176,7 +223,21 @@ export default function GrafikScreen() {
 
   return (
     <View style={styles.root}>
-      <Header title="Grafik" subtitle={weekLabel(weekStart)} />
+      <Header
+        title="Grafik"
+        subtitle={weekLabel(weekStart)}
+        right={
+          user ? (
+            <Pressable
+              testID="open-swaps"
+              onPress={() => router.push('/swaps')}
+              style={styles.headerBtn}
+            >
+              <Icon name="swap-horizontal" size={20} color={t.colors.onSurface} />
+            </Pressable>
+          ) : undefined
+        }
+      />
 
       {/* Sticky week navigator */}
       <View style={styles.nav}>
@@ -285,13 +346,15 @@ export default function GrafikScreen() {
                     </View>
                   </View>
 
-                  {day.shifts.map((s) => (
+                  {day.shifts.map((s) => {
+                    const canTap = canEdit || (!!user?.personKey && s.person === user.personKey);
+                    return (
                     <Pressable
                       key={s.id}
                       testID={`shift-${day.dayIndex}-${s.shift}`}
                       onPress={() => openEditor(day.dayIndex, s.shift)}
-                      disabled={!canEdit}
-                      style={({ pressed }) => [styles.shiftRow, pressed && canEdit && { opacity: 0.7 }]}
+                      disabled={!canTap}
+                      style={({ pressed }) => [styles.shiftRow, pressed && canTap && { opacity: 0.7 }]}
                     >
                       <View style={[styles.shiftBar, { backgroundColor: colorFor(s.person) }]} />
                       <View style={styles.shiftBody}>
@@ -314,9 +377,14 @@ export default function GrafikScreen() {
                           </View>
                         </View>
                       </View>
-                      {canEdit && <Icon name="pencil" size={16} color={t.colors.muted} />}
+                      {canEdit ? (
+                        <Icon name="pencil" size={16} color={t.colors.muted} />
+                      ) : !canEdit && user?.personKey && s.person === user.personKey ? (
+                        <Icon name="swap-horizontal" size={16} color={t.colors.brandSecondary} />
+                      ) : null}
                     </Pressable>
-                  ))}
+                    );
+                  })}
                 </View>
               );
             })}
@@ -451,12 +519,68 @@ export default function GrafikScreen() {
             ))}
           </View>
 
+          <Text style={styles.optCat}>Ile tygodni naprzód?</Text>
+          <View style={styles.optRow}>
+            {[1, 2, 4, 8].map((c) => (
+              <Pressable
+                key={c}
+                testID={`gen-count-${c}`}
+                onPress={() => setGenCount(c)}
+                style={[styles.genChip, genCount === c && styles.genChipActive]}
+              >
+                <Text style={[styles.genChipText, genCount === c && { color: '#fff' }]}>{c}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {genCount > 1 && (
+            <Text style={styles.hintText}>
+              Rotacja będzie naprzemienna w kolejnych tygodniach.
+            </Text>
+          )}
+
           <Button
             testID="gen-confirm"
-            title="GENERUJ"
+            title={genCount > 1 ? `GENERUJ ${genCount} TYGODNI` : 'GENERUJ'}
             onPress={doGenerate}
-            loading={generateWeek.isPending}
+            loading={generateWeek.isPending || generateMulti.isPending}
             style={{ marginTop: t.spacing.lg }}
+          />
+        </BottomSheetView>
+      </BottomSheet>
+
+      {/* Swap proposal bottom sheet (employees) */}
+      <BottomSheet
+        ref={swapSheet}
+        index={-1}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: t.colors.surfaceSecondary }}
+        handleIndicatorStyle={{ backgroundColor: t.colors.borderStrong }}
+      >
+        <BottomSheetView style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+          <Text style={styles.sheetTitle}>Zaproponuj zamianę</Text>
+          <Text style={styles.sheetSub}>
+            {swapTarget
+              ? `${DAYS[swapTarget.dayIndex]} · Zmiana ${swapTarget.shift === 1 ? 'I' : 'II'}`
+              : ''}
+          </Text>
+          <Text style={styles.sheetSub}>
+            Zmiana pojawi się w „Zamiany" — kolega z ekipy może ją przejąć.
+          </Text>
+          <BottomSheetTextInput
+            testID="swap-note"
+            value={swapNote}
+            onChangeText={setSwapNote}
+            placeholder="Notatka (opcjonalnie), np. powód zamiany"
+            placeholderTextColor={t.colors.muted}
+            style={styles.noteInput}
+          />
+          <Button
+            testID="swap-confirm"
+            title="WYŚLIJ PROPOZYCJĘ"
+            onPress={proposeSwap}
+            loading={createSwap.isPending}
+            style={{ marginTop: t.spacing.md }}
           />
         </BottomSheetView>
       </BottomSheet>
@@ -466,6 +590,29 @@ export default function GrafikScreen() {
 
 const useStyles = makeStyles((t) => ({
   root: { flex: 1, backgroundColor: t.colors.surface },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: t.radius.md,
+    backgroundColor: t.colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
+  hintText: { color: t.colors.muted, fontSize: t.font.sm, marginTop: t.spacing.sm },
+  noteInput: {
+    backgroundColor: t.colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    borderRadius: t.radius.lg,
+    color: t.colors.onSurface,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
+    fontSize: t.font.base,
+    marginTop: t.spacing.md,
+    minHeight: 48,
+  },
   nav: {
     flexDirection: 'row',
     alignItems: 'center',

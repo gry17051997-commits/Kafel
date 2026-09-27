@@ -15,10 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.grafikpracy.app"
+      "bundleIdentifier": "com.grafikpracy.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Udostępniaj lokalizację auta zespołowi"
+      }
     },
     "android": {
       "package": "com.grafikpracy.app",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0F172A"
@@ -31,6 +35,12 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Udostępniaj lokalizację auta zespołowi"
+        }
+      ],
       [
         "expo-splash-screen",
         {
