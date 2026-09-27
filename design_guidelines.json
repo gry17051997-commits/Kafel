@@ -1,0 +1,170 @@
+{
+  "app_name": "Grafik Pracy",
+  "personality": "7 Dark-First Utility",
+  "personality_one_liner": "A sharp, high-contrast, data-dense scheduling tool designed for fast scanning and immediate operational clarity.",
+  "color": {
+    "surface": "#0F172A",
+    "onSurface": "#F8FAFC",
+    "surfaceSecondary": "#1E293B",
+    "onSurfaceSecondary": "#F8FAFC",
+    "surfaceTertiary": "#334155",
+    "onSurfaceTertiary": "#F8FAFC",
+    "surfaceInverse": "#F8FAFC",
+    "onSurfaceInverse": "#0F172A",
+    "brand": "#3F78ED",
+    "brandPrimary": "#3F78ED",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#4F8CFF",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#1E3A8A",
+    "onBrandTertiary": "#60A5FA",
+    "success": "#35C98A",
+    "onSuccess": "#000000",
+    "warning": "#F59E0B",
+    "onWarning": "#000000",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#8F6CFF",
+    "onInfo": "#FFFFFF",
+    "border": "#334155",
+    "borderStrong": "#475569",
+    "divider": "#1E293B",
+    "muted": "#94A3B8",
+    "onBrand": "#FFFFFF"
+  },
+  "typography": {
+    "displayFontFamily": "Rajdhani",
+    "textFontFamily": "Satoshi",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Use tight, utility-focused spacing to maximize data density. Keep margins predictable and padding compact.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 4,
+    "md": 8,
+    "lg": 12,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "false",
+    "do's": [],
+    "dont's": [
+      "Do not use glass or blur effects in Dark-First Utility mode.",
+      "Avoid translucent overlays on dense data tables."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Teraz (Dashboard)",
+      "purpose": "Show immediate shift status and actionable schedule information without calendar navigation.",
+      "states": {
+        "loading": "Skeleton blocks matching the hero card shape.",
+        "empty": "Empty state illustration with text 'Masz dzisiaj wolne' (You have today off).",
+        "error": "Failed to load shift. Retry button in brandPrimary."
+      },
+      "layout": "Hero card at the top displaying the current/next shift with large Rajdhani times and a location badge. Below the hero card, a 2-column grid showing quick metrics (Hours this week, Pay estimate). Avoid deep nesting."
+    },
+    {
+      "name": "Grafik (Weekly Schedule)",
+      "purpose": "A week view listing Monday-Sunday shifts, color-coded by assigned worker.",
+      "states": {
+        "loading": "List of skeleton day rows.",
+        "empty": "Empty schedule illustration.",
+        "error": "Failed to load week data. Retry button."
+      },
+      "layout": "Sticky week navigator pinned at the top (Prev | Current Week | Next). Content is an Agenda/List layout: each day is a section containing 'Zmiana I' (Shift 1) and 'Zmiana II' (Shift 2) cards. Shift cards must show times prominently, accompanied by the worker's avatar and a colored indicator line or pill (blue, purple, or green) denoting the assigned worker."
+    },
+    {
+      "name": "Podsumowanie (Summary)",
+      "purpose": "Earnings and hours breakdown per worker with filtering.",
+      "states": {
+        "loading": "Skeleton metrics grid.",
+        "empty": "No data for this time period.",
+        "error": "Error loading metrics. Retry."
+      },
+      "layout": "Horizontal scrolling chip row at the top to filter by worker name. Below, a large 2-column metric block displaying 'Total Hours' and 'Total Earnings' using oversized Rajdhani font. Beneath the metrics, a flat list of completed shifts."
+    },
+    {
+      "name": "Użytkownicy (Admin Panel)",
+      "purpose": "Manage team members, roles, and assigned color markers.",
+      "states": {
+        "loading": "Skeleton list rows.",
+        "empty": "No users found.",
+        "error": "Failed to fetch users. Retry."
+      },
+      "layout": "List of user rows. Each row includes the user's avatar, name, and a role badge (Admin / Pracownik / Koordynator) inside a surfaceTertiary pill. Include a colored dot next to the name representing their schedule marker color (#3f78ed, #8f6cff, #35c98a)."
+    },
+    {
+      "name": "Logowanie (Auth)",
+      "purpose": "Email/password login, register, or guest access.",
+      "states": {
+        "loading": "Spinner on primary button.",
+        "empty": "N/A",
+        "error": "Inline text in error color below input."
+      },
+      "layout": "Full-screen background image of a dark warehouse with a heavy gradient-to-dark scrim. Login form positioned in the lower 40% of the screen. Inputs use surfaceTertiary background with border highlights on focus."
+    }
+  ],
+  "images": {
+    "login_hero_bg": {
+      "url": "https://images.unsplash.com/photo-1741655262435-4890ab9918fa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwyfHxkYXJrJTIwd2FyZWhvdXNlJTIwbG9naXN0aWMlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc5MDQ5ODQ1N3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Dark warehouse logistics storage"
+    },
+    "worker_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1584611139207-9cf4fed64188?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwzfHx3YXJlaG91c2UlMjBsb2dpc3RpY3MlMjB3b3JrZXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3OTA0OTg0NTJ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Warehouse female worker"
+    },
+    "worker_avatar_2": {
+      "url": "https://images.unsplash.com/photo-1740914994162-0b2a49280aeb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHx3YXJlaG91c2UlMjBsb2dpc3RpY3MlMjB3b3JrZXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3OTA0OTg0NTJ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Warehouse male worker on ladder"
+    },
+    "empty_schedule": {
+      "url": "https://images.unsplash.com/photo-1606327054476-256fc9690fe2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGNhbGVuZGFyJTIwY2hlY2tsaXN0JTIwaWxsdXN0cmF0aW9ufGVufDB8fHx8MTc5MDQ5ODQ1N3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty calendar view"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Dark-First Utility personality: rely on high contrast, solid dark slate surfaces (#0F172A, #1E293B, #334155), and zero blur/glassmorphism for maximum readability.",
+    "Implement the specific colors requested by the user: background uses slate tones, main accent is #3F78ED (blue), and worker markers use blue, purple (#8F6CFF), and green (#35C98A).",
+    "Use Rajdhani for all metrics, shift times, and hours to create a tactical, scanner-friendly data hierarchy.",
+    "For the Weekly Schedule (Grafik), use an Agenda/List view rather than a compressed grid. This prevents text truncation and ensures location and shift times remain fully legible.",
+    "Ensure all primary call-to-action buttons are sticky at the bottom with safe-area padding to respect the thumb zone.",
+    "For the Auth login screen, layer a vertical gradient scrim (transparent to #0F172A) over the 'login_hero_bg' image so the login form text remains completely readable."
+  ],
+  "haptics": {
+    "primary_button_press": "impactLight",
+    "tab_change": "selection",
+    "schedule_date_change": "selection",
+    "shift_assignment_edit": "impactMedium",
+    "filter_chip_toggle": "selection"
+  }
+}
