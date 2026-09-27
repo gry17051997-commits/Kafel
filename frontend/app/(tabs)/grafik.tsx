@@ -12,6 +12,7 @@ import {
   useGenerateWeek,
   useGenerateMulti,
   useClearShift,
+  useLockWeek,
   usePeople,
   useSettings,
   useMeta,
@@ -55,6 +56,7 @@ export default function GrafikScreen() {
   const generateWeek = useGenerateWeek(weekStart);
   const generateMulti = useGenerateMulti();
   const clearShift = useClearShift(weekStart);
+  const lockWeek = useLockWeek(weekStart);
   const { create: createSwap } = useSwapMutations();
 
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
@@ -89,6 +91,10 @@ export default function GrafikScreen() {
   );
 
   const openEditor = (dayIndex: number, shift: number) => {
+    if (locked) {
+      toast('Tydzień jest zatwierdzony (zablokowany)', 'info');
+      return;
+    }
     if (canEdit) {
       setEditing({ dayIndex, shift });
       editSheet.current?.expand();
@@ -204,6 +210,16 @@ export default function GrafikScreen() {
     }
   };
 
+  const locked = !!draft?.locked;
+  const doLock = async () => {
+    try {
+      await lockWeek.mutateAsync(!locked);
+      toast(locked ? 'Tydzień odblokowany' : 'Tydzień zatwierdzony', 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Nie udało się zmienić statusu', 'error');
+    }
+  };
+
   const stats = useMemo(() => {
     const d = draft?.days || [];
     let filled = 0;
@@ -250,11 +266,16 @@ export default function GrafikScreen() {
         </Pressable>
         <View style={styles.navCenter}>
           <Text style={styles.navLabel}>{weekLabel(weekStart)}</Text>
-          {weekStart !== todayIso && (
+          {locked ? (
+            <View style={styles.lockedRow}>
+              <Icon name="lock" size={13} color={t.colors.warning} />
+              <Text style={styles.lockedText}>Zatwierdzony</Text>
+            </View>
+          ) : weekStart !== todayIso ? (
             <Pressable testID="today-btn" onPress={() => setWeekStartDate(monday(new Date()))}>
               <Text style={styles.todayLink}>Wróć do bieżącego tygodnia</Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
         <Pressable
           testID="next-week"
@@ -301,9 +322,14 @@ export default function GrafikScreen() {
                   variant="secondary"
                   icon={<Icon name="auto-fix" size={18} color={t.colors.onSurface} />}
                   onPress={() => {
+                    if (locked) {
+                      toast('Odblokuj tydzień, aby generować', 'info');
+                      return;
+                    }
                     setGenOpts({ hours: draft.hours, rotation: draft.rotation, warehouse: draft.warehouse });
                     genSheet.current?.expand();
                   }}
+                  disabled={locked}
                   style={{ flex: 1 }}
                 />
                 <Button
@@ -312,6 +338,7 @@ export default function GrafikScreen() {
                   small
                   variant="ghost"
                   onPress={() => doClear(1)}
+                  disabled={locked}
                   style={{ flex: 1 }}
                 />
                 <Button
@@ -320,9 +347,21 @@ export default function GrafikScreen() {
                   small
                   variant="ghost"
                   onPress={() => doClear(2)}
+                  disabled={locked}
                   style={{ flex: 1 }}
                 />
               </View>
+            )}
+
+            {canEdit && (
+              <Button
+                testID="lock-btn"
+                title={locked ? 'Odblokuj tydzień' : 'Zatwierdź tydzień'}
+                variant={locked ? 'secondary' : 'primary'}
+                loading={lockWeek.isPending}
+                onPress={doLock}
+                icon={<Icon name={locked ? 'lock-open-variant' : 'lock-check'} size={18} color={locked ? t.colors.onSurface : '#fff'} />}
+              />
             )}
 
             {draft.days.map((day) => {
@@ -634,6 +673,8 @@ const useStyles = makeStyles((t) => ({
   navCenter: { flex: 1, alignItems: 'center' },
   navLabel: { color: t.colors.onSurface, fontSize: t.font.lg, fontWeight: '900' },
   todayLink: { color: t.colors.brandSecondary, fontSize: t.font.sm, fontWeight: '700', marginTop: 2 },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  lockedText: { color: t.colors.warning, fontSize: t.font.sm, fontWeight: '800' },
   statsStrip: {
     flexDirection: 'row',
     gap: t.spacing.sm,

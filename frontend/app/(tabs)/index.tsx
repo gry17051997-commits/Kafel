@@ -9,6 +9,7 @@ import { useWeek, useSummary, usePeople, useSettings } from '@/src/hooks';
 import { useAuth } from '@/src/auth';
 import { router } from 'expo-router';
 import { usesNativeTabs } from '@/src/navigation';
+import { NotificationBell } from '@/src/components/NotificationBell';
 import { makeStyles, useTheme, workerColors } from '@/src/theme';
 import { monday, iso, DAYS, shiftTime } from '@/src/constants';
 
@@ -72,6 +73,7 @@ export default function TerazScreen() {
       <Header
         title={`Cześć${user?.displayName ? ', ' + user.displayName.split(' ')[0] : ''}!`}
         subtitle={`${DAYS[dayIndex]} · ${today.getDate()}.${String(today.getMonth() + 1).padStart(2, '0')}`}
+        right={<NotificationBell />}
       />
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: bottomChrome + 24, gap: t.spacing.md }}

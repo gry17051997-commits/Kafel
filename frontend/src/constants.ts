@@ -79,6 +79,7 @@ export type Week = {
   rotation: string;
   warehouse: string;
   days: Day[];
+  locked?: boolean;
   updatedAt: string | null;
   updatedBy: string;
   exists?: boolean;

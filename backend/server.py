@@ -41,6 +41,9 @@ chat = db.chat
 settings_col = db.settings
 locations = db.locations
 swaps = db.swaps
+notifications = db.notifications
+
+DAYS_PL = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -79,6 +82,28 @@ def public_user(doc: dict) -> dict:
         "displayName": doc.get("displayName", ""),
         "personKey": doc.get("personKey", ""),
     }
+
+
+async def add_notification(kind: str, text: str, actor: dict) -> None:
+    await notifications.insert_one({
+        "id": str(ObjectId()),
+        "type": kind,
+        "text": text,
+        "actorId": actor.get("id", ""),
+        "actorName": actor.get("displayName") or actor.get("email", ""),
+        "createdAt": now_utc().isoformat(),
+    })
+
+
+def haversine_km(a: dict, b: dict) -> float:
+    import math
+    r = 6371.0
+    dlat = math.radians(b["lat"] - a["lat"])
+    dlng = math.radians(b["lng"] - a["lng"])
+    lat1 = math.radians(a["lat"])
+    lat2 = math.radians(b["lat"])
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
 
 
 async def current_user(
@@ -205,6 +230,10 @@ class SwapIn(BaseModel):
     note: str = ""
 
 
+class LockIn(BaseModel):
+    locked: bool = True
+
+
 # ----------------------------- schedule logic -----------------------------
 def empty_week(warehouse: str = "PNT B") -> list:
     days = []
@@ -257,6 +286,7 @@ def serialize_week(doc: dict) -> dict:
         "rotation": doc.get("rotation", "P"),
         "warehouse": doc.get("warehouse", "PNT B"),
         "days": doc.get("days", empty_week()),
+        "locked": doc.get("locked", False),
         "updatedAt": doc.get("updatedAt"),
         "updatedBy": doc.get("updatedBy", ""),
     }
@@ -271,6 +301,7 @@ async def lifespan(app: FastAPI):
     await chat.create_index([("createdAt", ASCENDING)])
     await locations.create_index([("ts", ASCENDING)])
     await swaps.create_index([("status", ASCENDING)])
+    await notifications.create_index([("createdAt", ASCENDING)])
 
     email = os.environ["ADMIN_EMAIL"].lower()
     existing = await users.find_one({"email": email})
@@ -434,13 +465,21 @@ async def get_week(week_start: str, _: Annotated[Optional[dict], Depends(optiona
             "days": empty_week(),
             "updatedAt": None,
             "updatedBy": "",
+            "locked": False,
             "exists": False,
         }
     return {**serialize_week(doc), "exists": True}
 
 
+async def ensure_week_unlocked(week_start: str) -> None:
+    doc = await weeks.find_one({"weekStart": week_start})
+    if doc and doc.get("locked"):
+        raise HTTPException(423, "Tydzień jest zatwierdzony (zablokowany). Odblokuj, aby edytować.")
+
+
 @app.put("/api/schedule/{week_start}")
 async def save_week(week_start: str, body: WeekIn, user: Annotated[dict, Depends(require_roles("admin"))]):
+    await ensure_week_unlocked(week_start)
     doc = {
         "weekStart": week_start,
         "hours": body.hours,
@@ -451,11 +490,13 @@ async def save_week(week_start: str, body: WeekIn, user: Annotated[dict, Depends
         "updatedBy": user.get("displayName") or user["email"],
     }
     await weeks.update_one({"weekStart": week_start}, {"$set": doc}, upsert=True)
-    return {**serialize_week(doc), "exists": True}
+    saved = await weeks.find_one({"weekStart": week_start})
+    return {**serialize_week(saved), "exists": True}
 
 
 @app.post("/api/schedule/{week_start}/generate")
 async def generate(week_start: str, body: GenerateIn, user: Annotated[dict, Depends(require_roles("admin"))]):
+    await ensure_week_unlocked(week_start)
     days = generate_week(body.rotation, body.warehouse)
     doc = {
         "weekStart": week_start,
@@ -472,6 +513,7 @@ async def generate(week_start: str, body: GenerateIn, user: Annotated[dict, Depe
 
 @app.post("/api/schedule/{week_start}/clear-shift")
 async def clear_shift(week_start: str, body: ClearShiftIn, user: Annotated[dict, Depends(require_roles("admin"))]):
+    await ensure_week_unlocked(week_start)
     doc = await weeks.find_one({"weekStart": week_start})
     if not doc:
         raise HTTPException(404, "Brak grafiku dla tego tygodnia")
@@ -483,6 +525,22 @@ async def clear_shift(week_start: str, body: ClearShiftIn, user: Annotated[dict,
         {"weekStart": week_start},
         {"$set": {"days": doc["days"], "updatedAt": now_utc().isoformat(),
                   "updatedBy": user.get("displayName") or user["email"]}},
+    )
+    doc = await weeks.find_one({"weekStart": week_start})
+    return {**serialize_week(doc), "exists": True}
+
+
+@app.post("/api/schedule/{week_start}/lock")
+async def lock_week(week_start: str, body: LockIn, user: Annotated[dict, Depends(require_roles("admin"))]):
+    existing = await weeks.find_one({"weekStart": week_start})
+    if not existing:
+        raise HTTPException(404, "Brak grafiku dla tego tygodnia")
+    await weeks.update_one({"weekStart": week_start}, {"$set": {"locked": body.locked}})
+    label = week_start
+    await add_notification(
+        "lock",
+        f"Grafik na tydzień {label} został {'zatwierdzony' if body.locked else 'odblokowany'}.",
+        user,
     )
     doc = await weeks.find_one({"weekStart": week_start})
     return {**serialize_week(doc), "exists": True}
@@ -593,8 +651,13 @@ def add_weeks_iso(week_start: str, n: int) -> str:
 async def generate_multi(body: MultiGenerateIn, user: Annotated[dict, Depends(require_roles("admin"))]):
     count = max(1, min(body.count, 12))
     created = []
+    skipped = []
     for i in range(count):
         wk = add_weeks_iso(body.startWeek, i)
+        existing = await weeks.find_one({"weekStart": wk})
+        if existing and existing.get("locked"):
+            skipped.append(wk)
+            continue
         rotation = body.rotation
         if body.alternateRotation and i % 2 == 1:
             rotation = "M" if body.rotation == "P" else "P"
@@ -610,7 +673,7 @@ async def generate_multi(body: MultiGenerateIn, user: Annotated[dict, Depends(re
         }
         await weeks.update_one({"weekStart": wk}, {"$set": doc}, upsert=True)
         created.append(wk)
-    return {"created": created, "count": len(created)}
+    return {"created": created, "count": len(created), "skipped": skipped}
 
 
 # ----------------------------- vehicle location -----------------------------
@@ -680,6 +743,8 @@ async def create_swap(body: SwapIn, user: Annotated[dict, Depends(current_user)]
     week = await weeks.find_one({"weekStart": body.weekStart})
     if not week:
         raise HTTPException(404, "Brak grafiku dla tego tygodnia")
+    if week.get("locked"):
+        raise HTTPException(423, "Ten tydzień jest zatwierdzony — brak zamian")
     shift = None
     for day in week["days"]:
         if day["dayIndex"] == body.dayIndex:
@@ -713,6 +778,11 @@ async def create_swap(body: SwapIn, user: Annotated[dict, Depends(current_user)]
         "resolvedAt": None,
     }
     await swaps.insert_one(dict(doc))
+    await add_notification(
+        "swap_new",
+        f"{doc['fromName']} wystawił zmianę do przejęcia: {DAYS_PL[body.dayIndex]} · Zmiana {'I' if body.shift == 1 else 'II'}",
+        user,
+    )
     return serialize_swap(doc)
 
 
@@ -728,6 +798,8 @@ async def accept_swap(swap_id: str, user: Annotated[dict, Depends(current_user)]
     week = await weeks.find_one({"weekStart": swap["weekStart"]})
     if not week:
         raise HTTPException(404, "Brak grafiku dla tego tygodnia")
+    if week.get("locked"):
+        raise HTTPException(423, "Ten tydzień jest zatwierdzony — brak zamian")
     for day in week["days"]:
         if day["dayIndex"] == swap["dayIndex"]:
             for s in day["shifts"]:
@@ -746,6 +818,11 @@ async def accept_swap(swap_id: str, user: Annotated[dict, Depends(current_user)]
                   "toPersonKey": user["personKey"], "resolvedAt": now_utc().isoformat()}},
     )
     doc = await swaps.find_one({"id": swap_id})
+    await add_notification(
+        "swap_accepted",
+        f"{user.get('displayName') or user['email']} przejął zmianę od {swap.get('fromName', '')}: {DAYS_PL[swap['dayIndex']]} · Zmiana {'I' if swap['shift'] == 1 else 'II'}",
+        user,
+    )
     return serialize_swap(doc)
 
 
@@ -758,3 +835,106 @@ async def cancel_swap(swap_id: str, user: Annotated[dict, Depends(current_user)]
         raise HTTPException(403, "Możesz anulować tylko własną propozycję")
     await swaps.update_one({"id": swap_id}, {"$set": {"status": "cancelled", "resolvedAt": now_utc().isoformat()}})
     return {"ok": True}
+
+
+# ----------------------------- notifications -----------------------------
+@app.get("/api/notifications")
+async def list_notifications(user: Annotated[dict, Depends(current_user)]):
+    docs = await notifications.find({}, {"_id": 0}).sort("createdAt", -1).to_list(50)
+    return docs
+
+
+# ----------------------------- route summary -----------------------------
+def _monday_of(date_iso: str) -> tuple[str, int]:
+    y, m, d = map(int, date_iso.split("-"))
+    dt = datetime(y, m, d)
+    day_index = dt.weekday()  # Mon=0
+    monday = dt - timedelta(days=day_index)
+    return f"{monday.year}-{monday.month:02d}-{monday.day:02d}", day_index
+
+
+@app.get("/api/location/route-summary")
+async def route_summary(date: str, _: Annotated[Optional[dict], Depends(optional_user)] = None):
+    docs = await locations.find({"ts": {"$regex": f"^{date}"}}, {"_id": 0}).sort("ts", ASCENDING).to_list(1000)
+    km = 0.0
+    for i in range(1, len(docs)):
+        km += haversine_km(docs[i - 1], docs[i])
+    duration_min = 0
+    if len(docs) >= 2:
+        t0 = datetime.fromisoformat(docs[0]["ts"])
+        t1 = datetime.fromisoformat(docs[-1]["ts"])
+        duration_min = int((t1 - t0).total_seconds() // 60)
+    avg_speed = round(km / (duration_min / 60), 1) if duration_min > 0 else 0
+    # Scheduled warehouses for that day (from the schedule)
+    warehouses_visited = []
+    try:
+        wk, di = _monday_of(date)
+        week = await weeks.find_one({"weekStart": wk})
+        if week:
+            for day in week.get("days", []):
+                if day["dayIndex"] == di:
+                    for s in day["shifts"]:
+                        if s.get("warehouse") and s["warehouse"] not in warehouses_visited:
+                            warehouses_visited.append(s["warehouse"])
+    except Exception:
+        pass
+    return {
+        "date": date,
+        "km": round(km, 2),
+        "durationMinutes": duration_min,
+        "points": len(docs),
+        "avgSpeed": avg_speed,
+        "startTs": docs[0]["ts"] if docs else None,
+        "endTs": docs[-1]["ts"] if docs else None,
+        "warehouses": warehouses_visited,
+    }
+
+
+# ----------------------------- monthly summary -----------------------------
+@app.get("/api/summary/month/{year}/{month}")
+async def monthly_summary(year: int, month: int, _: Annotated[Optional[dict], Depends(optional_user)] = None):
+    import calendar
+    settings_doc = await get_settings_doc()
+    person_colors = settings_doc.get("personColors", WORKER_COLORS)
+    people_map = {
+        k: {"key": k, "name": DEFAULT_PEOPLE[k], "color": person_colors.get(k, WORKER_COLORS[k]),
+            "shifts": 0, "hours": 0, "pay": 0}
+        for k in PERSON_KEYS
+    }
+    udocs = await users.find({"deleted_at": None, "personKey": {"$in": PERSON_KEYS}}).to_list(100)
+    for d in udocs:
+        pk = d.get("personKey")
+        if pk in people_map and d.get("displayName"):
+            people_map[pk]["name"] = d["displayName"]
+
+    days_in_month = calendar.monthrange(year, month)[1]
+    week_cache: dict = {}
+    total_shifts = total_hours = total_pay = 0
+    for day_num in range(1, days_in_month + 1):
+        date_iso = f"{year}-{month:02d}-{day_num:02d}"
+        wk, di = _monday_of(date_iso)
+        if wk not in week_cache:
+            week_cache[wk] = await weeks.find_one({"weekStart": wk})
+        week = week_cache[wk]
+        if not week:
+            continue
+        hours = str(week.get("hours", 10))
+        rate = RATES.get(hours, 300)
+        for day in week.get("days", []):
+            if day["dayIndex"] != di:
+                continue
+            for s in day["shifts"]:
+                p = s.get("person")
+                if p in people_map:
+                    people_map[p]["shifts"] += 1
+                    people_map[p]["hours"] += int(hours)
+                    people_map[p]["pay"] += rate
+                    total_shifts += 1
+                    total_hours += int(hours)
+                    total_pay += rate
+    return {
+        "year": year,
+        "month": month,
+        "people": list(people_map.values()),
+        "totals": {"shifts": total_shifts, "hours": total_hours, "pay": total_pay},
+    }

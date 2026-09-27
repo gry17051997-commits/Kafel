@@ -74,6 +74,43 @@ export function useClearShift(weekStart: string) {
   });
 }
 
+export function useLockWeek(weekStart: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (locked: boolean) => post(`/api/schedule/${weekStart}/lock`, { locked }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['week', weekStart] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+export function useNotifications(enabled: boolean) {
+  return useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => get('/api/notifications'),
+    enabled,
+    refetchInterval: enabled ? 10000 : false,
+  });
+}
+
+export function useRouteSummary(dateIso: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['route-summary', dateIso],
+    queryFn: () => get(`/api/location/route-summary?date=${dateIso}`),
+    enabled,
+    refetchInterval: enabled ? 8000 : false,
+  });
+}
+
+export function useMonthlySummary(year: number, month: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['summary-month', year, month],
+    queryFn: () => get(`/api/summary/month/${year}/${month}`),
+    enabled,
+  });
+}
+
 /* ---------------- Settings ---------------- */
 export function useSaveSettings() {
   const qc = useQueryClient();

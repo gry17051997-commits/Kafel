@@ -4,9 +4,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Icon } from '@/src/components/Icon';
 import { Card, Loading } from '@/src/components/ui';
-import { useSummary } from '@/src/hooks';
+import { useSummary, useMonthlySummary } from '@/src/hooks';
 import { makeStyles, useTheme } from '@/src/theme';
 import { monday, iso, addDays, weekLabel } from '@/src/constants';
+
+const MONTHS_PL = [
+  'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+  'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
+];
 
 export default function PodsumowanieScreen() {
   const t = useTheme();
@@ -15,10 +20,18 @@ export default function PodsumowanieScreen() {
 
   const [weekStartDate, setWeekStartDate] = useState(() => monday(new Date()));
   const weekStart = iso(weekStartDate);
+  const [period, setPeriod] = useState<'week' | 'month'>('week');
+  const [monthDate, setMonthDate] = useState(() => new Date());
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth() + 1;
+
   const summaryQ = useSummary(weekStart);
+  const monthQ = useMonthlySummary(year, month, period === 'month');
   const [filter, setFilter] = useState<string>('all');
 
-  const people: any[] = summaryQ.data?.people || [];
+  const activeQ = period === 'week' ? summaryQ : monthQ;
+  const people: any[] = activeQ.data?.people || [];
+  const periodLabel = period === 'week' ? weekLabel(weekStart) : `${MONTHS_PL[month - 1]} ${year}`;
 
   const shown = useMemo(() => {
     if (filter === 'all') return people;
@@ -44,16 +57,50 @@ export default function PodsumowanieScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Zarobki</Text>
-          <Text style={styles.subtitle}>{weekLabel(weekStart)}</Text>
+          <Text style={styles.subtitle}>{periodLabel}</Text>
         </View>
       </View>
 
+      {/* Period toggle */}
+      <View style={styles.toggleRow}>
+        <Pressable
+          testID="period-week"
+          onPress={() => setPeriod('week')}
+          style={[styles.toggle, period === 'week' && styles.toggleActive]}
+        >
+          <Text style={[styles.toggleText, period === 'week' && styles.toggleTextActive]}>Tydzień</Text>
+        </Pressable>
+        <Pressable
+          testID="period-month"
+          onPress={() => setPeriod('month')}
+          style={[styles.toggle, period === 'month' && styles.toggleActive]}
+        >
+          <Text style={[styles.toggleText, period === 'month' && styles.toggleTextActive]}>Miesiąc</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.nav}>
-        <Pressable testID="sum-prev" onPress={() => setWeekStartDate((d) => addDays(d, -7))} style={styles.navBtn}>
+        <Pressable
+          testID="sum-prev"
+          onPress={() =>
+            period === 'week'
+              ? setWeekStartDate((d) => addDays(d, -7))
+              : setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
+          }
+          style={styles.navBtn}
+        >
           <Icon name="chevron-left" size={22} color={t.colors.onSurface} />
         </Pressable>
-        <Text style={styles.navLabel}>{weekLabel(weekStart)}</Text>
-        <Pressable testID="sum-next" onPress={() => setWeekStartDate((d) => addDays(d, 7))} style={styles.navBtn}>
+        <Text style={styles.navLabel}>{periodLabel}</Text>
+        <Pressable
+          testID="sum-next"
+          onPress={() =>
+            period === 'week'
+              ? setWeekStartDate((d) => addDays(d, 7))
+              : setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))
+          }
+          style={styles.navBtn}
+        >
           <Icon name="chevron-right" size={22} color={t.colors.onSurface} />
         </Pressable>
       </View>
@@ -81,10 +128,10 @@ export default function PodsumowanieScreen() {
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: insets.bottom + 24, gap: t.spacing.md }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={summaryQ.isFetching} onRefresh={() => summaryQ.refetch()} tintColor={t.colors.brandPrimary} />
+          <RefreshControl refreshing={activeQ.isFetching} onRefresh={() => activeQ.refetch()} tintColor={t.colors.brandPrimary} />
         }
       >
-        {summaryQ.isLoading ? (
+        {activeQ.isLoading ? (
           <Loading label="Liczę zarobki..." />
         ) : (
           <>
@@ -149,6 +196,24 @@ const useStyles = makeStyles((t) => ({
   },
   title: { color: t.colors.onSurface, fontSize: t.font['2xl'], fontWeight: '900' },
   subtitle: { color: t.colors.muted, fontSize: t.font.base, marginTop: 2 },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+  },
+  toggle: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: t.radius.md,
+    alignItems: 'center',
+    backgroundColor: t.colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
+  toggleActive: { backgroundColor: t.colors.brandPrimary, borderColor: t.colors.brandPrimary },
+  toggleText: { color: t.colors.muted, fontWeight: '800', fontSize: t.font.base },
+  toggleTextActive: { color: '#fff' },
   nav: {
     flexDirection: 'row',
     alignItems: 'center',

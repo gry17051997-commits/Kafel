@@ -7,7 +7,7 @@ import { Icon } from '@/src/components/Icon';
 import { Button, Card, Loading } from '@/src/components/ui';
 import { useToast } from '@/src/components/Toast';
 import { VehicleMap } from '@/src/components/VehicleMap';
-import { useLatestLocation, useLocationHistory, usePushLocation, useSettings } from '@/src/hooks';
+import { useLatestLocation, useLocationHistory, usePushLocation, useSettings, useRouteSummary } from '@/src/hooks';
 import { useAuth } from '@/src/auth';
 import { usesNativeTabs } from '@/src/navigation';
 import { makeStyles, useTheme } from '@/src/theme';
@@ -23,6 +23,9 @@ export default function AutoScreen() {
   const historyQ = useLocationHistory(true);
   const settingsQ = useSettings();
   const pushLocation = usePushLocation();
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const routeQ = useRouteSummary(todayIso, true);
 
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const [sharing, setSharing] = useState(false);
@@ -144,6 +147,41 @@ export default function AutoScreen() {
           </Card>
         </View>
 
+        {/* Daily route summary */}
+        <Card testID="route-card">
+          <Text style={styles.shareTitle}>Trasa dzisiaj</Text>
+          <View style={styles.routeGrid}>
+            <View style={styles.routeItem}>
+              <Text style={styles.routeValue}>{routeQ.data?.km ?? 0} km</Text>
+              <Text style={styles.routeLabel}>Dystans</Text>
+            </View>
+            <View style={styles.routeItem}>
+              <Text style={styles.routeValue}>
+                {routeQ.data?.durationMinutes
+                  ? `${Math.floor(routeQ.data.durationMinutes / 60)}h ${routeQ.data.durationMinutes % 60}m`
+                  : '0m'}
+              </Text>
+              <Text style={styles.routeLabel}>Czas jazdy</Text>
+            </View>
+            <View style={styles.routeItem}>
+              <Text style={styles.routeValue}>{routeQ.data?.avgSpeed ?? 0}</Text>
+              <Text style={styles.routeLabel}>Śr. km/h</Text>
+            </View>
+          </View>
+          {routeQ.data?.warehouses?.length ? (
+            <View style={styles.whRow}>
+              <Text style={styles.routeLabel}>Magazyny (grafik):</Text>
+              <View style={styles.whChips}>
+                {routeQ.data.warehouses.map((w: string) => (
+                  <View key={w} style={styles.whChip}>
+                    <Text style={styles.whChipText}>{w}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </Card>
+
         {/* Share control */}
         {!guest && (
           <Card testID="share-card">
@@ -217,6 +255,19 @@ const useStyles = makeStyles((t) => ({
   statusValue: { color: t.colors.onSurface, fontSize: t.font.lg, fontWeight: '900', marginTop: 2 },
   statusLabel: { color: t.colors.muted, fontSize: t.font.sm },
   shareTitle: { color: t.colors.onSurface, fontSize: t.font.lg, fontWeight: '900' },
+  routeGrid: { flexDirection: 'row', marginTop: t.spacing.md },
+  routeItem: { flex: 1, alignItems: 'center', gap: 2 },
+  routeValue: { color: t.colors.brandSecondary, fontSize: t.font.xl, fontWeight: '900' },
+  routeLabel: { color: t.colors.muted, fontSize: t.font.sm },
+  whRow: { marginTop: t.spacing.md, gap: t.spacing.sm },
+  whChips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
+  whChip: {
+    backgroundColor: t.colors.surfaceTertiary,
+    borderRadius: t.radius.pill,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  whChipText: { color: t.colors.onSurfaceSecondary, fontSize: t.font.sm, fontWeight: '700' },
   shareText: { color: t.colors.muted, fontSize: t.font.base, marginTop: 4 },
   blocked: { color: t.colors.warning, fontSize: t.font.base, marginTop: t.spacing.md, fontWeight: '700' },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: t.spacing.md, justifyContent: 'center' },

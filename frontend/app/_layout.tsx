@@ -74,6 +74,7 @@ export default function RootLayout() {
                       <Stack.Screen name="(tabs)" />
                       <Stack.Screen name="podsumowanie" options={{ presentation: 'card' }} />
                       <Stack.Screen name="swaps" options={{ presentation: 'card' }} />
+                      <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
                     </Stack>
                   </ToastProvider>
                 </BottomSheetModalProvider>

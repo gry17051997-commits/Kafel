@@ -18,3 +18,9 @@ build/
 # Archives and local artifacts
 *.zip
 *.apk
+.env
+.env.*
+*.env
+*.pem
+*.key
+.credentials
